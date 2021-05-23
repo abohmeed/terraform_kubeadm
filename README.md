@@ -25,3 +25,10 @@ nodeRegistration:
   kubeletExtraArgs:
     cloud-provider: aws
 ```
+## The AMI image
+For this setup to work you are expected to use an AMI that contains the following:
+* Docker
+* kuebctl
+* kubeadm
+* kubelet
+The versions of the above software depends on the version of Kubernnetes that you intend to use. The code in this lab automatically selects the latest version of Kubernetes.
