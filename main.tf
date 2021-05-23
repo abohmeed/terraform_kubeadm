@@ -10,7 +10,7 @@ terraform {
 }
 module "kubernetes" {
   source = "./kubernetes"
-  ami = "ami-029a72555b2a91206"
+  ami = "ami-029a72555b2a91206" # PLEASE REMEMBER TO CHANGE THIS AMI TO YOUR OWN
   cluster_name = "skyvalley"
   master_instance_type = "t3.medium"
   nodes_max_size = 1
