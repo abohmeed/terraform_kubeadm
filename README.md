@@ -1,5 +1,5 @@
 # Terraform to Kubeadm
-This repository hosts the code that was demonstrated in this video
+This repository hosts the code that was demonstrated in this video https://youtu.be/F-ZJYjqr00Y
 ## The kubeadm config file
 ```yaml
 apiVersion: kubeadm.k8s.io/v1beta2
