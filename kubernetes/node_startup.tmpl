@@ -1,0 +1,104 @@
+#!/bin/bash
+hostnamectl set-hostname --static "$(curl -s http://169.254.169.254/latest/meta-data/local-hostname)"
+cat <<EOT >/home/ubuntu/.ssh/config
+Host *
+    StrictHostKeyChecking no
+EOT
+cat <<EOT >/root/.ssh/config
+Host *
+    StrictHostKeyChecking no
+EOT
+sshkey=/home/ubuntu/.ssh/sshkey.pem
+cat <<EOT >$sshkey
+${ssh_private_key}
+EOT
+chown ubuntu:ubuntu $sshkey /home/ubuntu/.ssh/config
+chmod 400 $sshkey
+# Wait for 10 seconds to ensure the instance has network connectivity
+echo "Making sure we have internet connectivity before proceeding"
+until ping -c 1 google.com; do
+  sleep 5
+done
+# Am I a master node?
+%{ if role == "master" }
+# Do we have a running cluster?
+output=$(curl -sk https://${lb_dns_name}:6443 | jq -r '.kind')
+if [[ $output != 'Status' ]]; then
+# No, we don't so let's create one
+  cat <<-EOT >/tmp/init.yaml
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+apiServer:
+  extraArgs:
+    cloud-provider: aws
+clusterName: ${cluster_name}
+controlPlaneEndpoint: "${lb_dns_name}"
+controllerManager:
+  extraArgs:
+    cloud-provider: aws
+    configure-cloud-routes: "false"
+kubernetesVersion: stable
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 192.168.0.0/16
+  serviceSubnet: 10.96.0.0/12
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+nodeRegistration:
+  kubeletExtraArgs:
+    cloud-provider: aws
+EOT
+  kubeadm init --config /tmp/init.yaml
+#  Install Weave net for a CNI plugin
+  kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+#  We have a cluster now. No need to continue with the script
+fi # end do we have a cluster check
+# Once we have the cluster, let's send the admin.conf file to Slack so that the admin can start creating users
+export KUBECONFIG=$(cat /etc/kubernetes/admin.conf)
+# Send the kubeconfig file to Slack
+curl -F file="@/etc/kubernetes/admin.conf" -F "initial_comment=${cluster_name} initial KUBECONFIG file" -F channels="${slack_channel}" -H "Authorization: Bearer ${slack_token}" https://slack.com/api/files.upload
+exit 0
+%{ endif } # end am I master check
+# If I am not the first master, then
+MASTERS=$(aws ec2 describe-instances --filters Name=tag-key,Values="kubernetes.io/cluster/${cluster_name}" --region ${region} | jq -r '.Reservations[].Instances[] | select (.State.Name == "running") | select(.Tags[].Key == "k8s.io/role/master") | .PrivateIpAddress')
+# Loop over all the master nodes until one of them replies
+while true; do
+  for m in $MASTERS; do
+    if JOIN_COMMAND=$(ssh -i $sshkey ubuntu@$m sudo kubeadm token create --print-join-command); then
+      # If we were able to connect and get the join command, also get the certificate
+      CERTIFICATE_KEY=$(ssh -i $sshkey ubuntu@$m sudo kubeadm init phase upload-certs --upload-certs | tail -1)
+      # TODO: TECHNICAL DEBT: we are dependent on the first master node to be available since it contains  the ETCD configuration. We need to find a way to make all the master nodes able to be used for joining other nodes
+      if [[ -n $CERTIFICATE_KEY ]]; then
+  #      if we have the certificate no need to loop over the rest of the master nodes
+        break 2
+      fi
+    fi
+#    Let's wait for a few seconds before we try the master nodes list again
+    sleep 10
+  done
+done
+LB=$(awk '{print $3}' <<< "$JOIN_COMMAND")
+TOKEN=$(awk '{print $5}' <<< "$JOIN_COMMAND")
+CERTIFICATE=$(awk '{print $7}' <<< "$JOIN_COMMAND")
+# We need to ensure that worker nodes that are dedicated to Prometheus and Kafka are labelled correctly
+cat <<-EOT >/tmp/join.yaml
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    token: $TOKEN
+    apiServerEndpoint: "$LB"
+    caCertHashes: ["$CERTIFICATE"]
+nodeRegistration:
+  name: $(hostname)
+  kubeletExtraArgs:
+    cloud-provider: aws
+%{ if role == "master" }
+controlPlane:
+  localAPIEndpoint:
+    advertiseAddress: $(hostname -i)
+  certificateKey: $CERTIFICATE_KEY
+%{ endif }
+EOT
+kubeadm join --config /tmp/join.yaml || exit 1
