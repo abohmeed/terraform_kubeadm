@@ -1,5 +1,5 @@
 resource "aws_key_pair" "sshkey" {
-  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7kyzmKjjV+J7OTULE7G1JcJOaF4iwNqWhCEXl7h7600w6jtNPi1COJdM4dZX+Hdxkr92mqGgbjX4N3ZXFvN51MpGIca+f9Bvz6D6ggnJWRl5j/8L+iBhSUnUrL8EP8iXWMyhopff2INzykNJkECjUg6ChbwGs2DapwtviCp0IHIFpenw7uvpCfyXcgl7bVWUao35Zc2zc5n7TQ3fXFN254dOfANU3ukR2824IKkjO1rEbLdPw/7k/3l2C3FsbuK0bw43ffm1QRfAcSUstxNOkeWqbAQqEGxL0m136IfeoQcHLlH8hQLb0aQaKvijKpCmEpc8eEUh5lVYNF96Gkst7"
+  public_key = var.ssh_public_key
   key_name   = "mysshkey"
 }
 data "aws_ami" "ubuntu" {

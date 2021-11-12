@@ -31,3 +31,6 @@ variable "nodes_max_size" {
 variable "nodes_min_size" {
   type = number
 }
+variable "ssh_public_key" {
+  type = string
+}
