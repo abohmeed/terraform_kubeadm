@@ -28,36 +28,62 @@ resource "aws_instance" "bastion" {
     Name = "bastion.${var.cluster_name}"
   }
 }
-resource "aws_elb" "api-k8s-local" {
-  name = "api-${var.cluster_name}"
-
-  listener {
-    instance_port     = 6443
-    instance_protocol = "TCP"
-    lb_port           = 6443
-    lb_protocol       = "TCP"
-  }
-
-  security_groups = [aws_security_group.api-elb-k8s-local.id]
-  subnets         = [aws_subnet.public01.id]
-
-  health_check {
-    target              = "SSL:6443"
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    interval            = 10
-    timeout             = 5
-  }
-
-  cross_zone_load_balancing = true
-  idle_timeout              = 300
-
+resource "aws_lb" "api-k8s-local" {
+  name               = "api-${var.cluster_name}"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = [aws_subnet.public01.id]
   tags = {
     KubernetesCluster                           = var.cluster_name
     Name                                        = "api.${var.cluster_name}"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   }
 }
+resource "aws_lb_listener" "k8s-api" {
+  load_balancer_arn = aws_lb.api-k8s-local.arn
+  port              = "6443"
+  protocol          = "TCP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.control-plane.arn
+  }
+}
+resource "aws_lb_target_group" "control-plane" {
+  name     = "control-plane"
+  port     = 6443
+  protocol = "TCP"
+  vpc_id   = aws_vpc.main.id
+}
+# resource "aws_elb" "api-k8s-local" {
+#   name = "api-${var.cluster_name}"
+
+#   listener {
+#     instance_port     = 6443
+#     instance_protocol = "TCP"
+#     lb_port           = 6443
+#     lb_protocol       = "TCP"
+#   }
+
+#   security_groups = [aws_security_group.api-elb-k8s-local.id]
+#   subnets         = [aws_subnet.public01.id]
+
+#   health_check {
+#     target              = "SSL:6443"
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 2
+#     interval            = 10
+#     timeout             = 5
+#   }
+
+#   cross_zone_load_balancing = true
+#   idle_timeout              = 300
+
+#   tags = {
+#     KubernetesCluster                           = var.cluster_name
+#     Name                                        = "api.${var.cluster_name}"
+#     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+#   }
+# }
 resource "aws_launch_configuration" "masters-az01-k8s-local" {
   name_prefix          = "masters.${var.cluster_name}"
   image_id             = var.ami
@@ -85,7 +111,7 @@ resource "aws_autoscaling_group" "master-k8s-local-01" {
   max_size             = 1
   min_size             = 1
   vpc_zone_identifier  = [aws_subnet.private01.id]
-  load_balancers       = [aws_elb.api-k8s-local.id]
+  target_group_arns    = [aws_lb_target_group.control-plane.arn]
 
   tags = [{
     key                 = "KubernetesCluster"

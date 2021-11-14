@@ -1,30 +1,30 @@
-resource "aws_security_group" "api-elb-k8s-local" {
-  name        = "api-elb.${var.cluster_name}.k8s.local"
-  vpc_id      = aws_vpc.main.id
-  description = "Security group for api ELB"
-  ingress {
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  ingress {
-    from_port   = 3
-    to_port     = 4
-    protocol    = "icmp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  tags = {
-    KubernetesCluster = "${var.cluster_name}.k8s.local"
-    Name              = "api-elb.${var.cluster_name}.k8s.local"
-  }
-}
+# resource "aws_security_group" "api-elb-k8s-local" {
+#   name        = "api-elb.${var.cluster_name}.k8s.local"
+#   vpc_id      = aws_vpc.main.id
+#   description = "Security group for api ELB"
+#   ingress {
+#     from_port   = 6443
+#     to_port     = 6443
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   ingress {
+#     from_port   = 3
+#     to_port     = 4
+#     protocol    = "icmp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#   tags = {
+#     KubernetesCluster = "${var.cluster_name}.k8s.local"
+#     Name              = "api-elb.${var.cluster_name}.k8s.local"
+#   }
+# }
 resource "aws_security_group" "bastion_node" {
   name        = "bastion_node"
   description = "Allow required traffic to the bastion node"
@@ -82,13 +82,13 @@ resource "aws_security_group" "k8s_master_nodes" {
 }
 
 resource "aws_security_group_rule" "traffic_from_lb" {
-  type                     = "ingress"
-  description              = "Allow API traffic from the load balancer"
-  from_port                = 6443
-  to_port                  = 6443
-  protocol                 = "TCP"
-  source_security_group_id = aws_security_group.api-elb-k8s-local.id
-  security_group_id        = aws_security_group.k8s_master_nodes.id
+  type              = "ingress"
+  description       = "Allow API traffic from the load balancer"
+  security_group_id = aws_security_group.k8s_master_nodes.id
+  from_port         = 6443
+  to_port           = 6443
+  protocol          = "TCP"
+  cidr_blocks       = ["0.0.0.0/0"]
 }
 resource "aws_security_group_rule" "traffic_from_workers_to_masters" {
   type                     = "ingress"
