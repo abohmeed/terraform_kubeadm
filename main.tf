@@ -11,7 +11,7 @@ terraform {
 module "kubernetes" {
   source = "./kubernetes"
   ami = "# Your configured AMI"
-  cluster_name = "# Your cluster name"
+  cluster_name = "basic-cluster"
   master_instance_type = "t3.medium"
   nodes_max_size = 1
   nodes_min_size = 1
